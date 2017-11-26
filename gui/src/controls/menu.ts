@@ -17,7 +17,7 @@ module BABYLON.GUI {
     export interface IMenuStyleData {
         text?: string,
         fontFamily?: string,
-        fontSize?: number,
+        fontSize?: string | number,
         fontStyle?: string,
         textColor?: string,
         borderColor?: string,
@@ -44,18 +44,14 @@ module BABYLON.GUI {
         shadowOffsetY?: number,
         shadowColor?: string
     }
-    
-    interface IControlHash {
-        [id:string]:Control;
-    }
 
-    interface IMenuStyleHash {
-        [id:string]:MenuStyle;
+    interface IControlMap {
+        [id:string]:Nullable<Control>;
     }
 
     class MenuStyle {
         public text: string;
-        public fontSize = 18;
+        public fontSize: string | number = 18;
         public fontStyle = "";
         public fontFamily: string;
         public textColor = "Black";
@@ -63,7 +59,7 @@ module BABYLON.GUI {
         public thickness = 1;
         public background: string;
         public height = "40px";
-        public width: string | number;
+        public width: string | number = "100%";
         public cornerRadius = 0;
         public paddingTop = "2px";
         public paddingRight = "2px";
@@ -82,7 +78,7 @@ module BABYLON.GUI {
         public shadowColor: string;
         
         constructor(options?: IMenuStyleData){
-            this.set(options);
+            this.update(options);
         }
 
         public clone(): MenuStyle{
@@ -119,7 +115,7 @@ module BABYLON.GUI {
             this.shadowColor = style.shadowColor;
         }
 
-        public set(options?: IMenuStyleData){
+        public update(options?: IMenuStyleData){
 
             if(options){
                 if(options.text){
@@ -205,6 +201,19 @@ module BABYLON.GUI {
                 if(options.textWrapping !== undefined && options.textWrapping !== null){
                     this.textWrapping = options.textWrapping;
                 }
+
+                if(options.shadowBlur !== undefined && options.textWrapping !== null){
+                    this.shadowBlur = options.shadowBlur;
+                }
+                if(options.shadowOffsetX !== undefined && options.shadowOffsetX !== null){
+                    this.shadowOffsetX = options.shadowOffsetX;
+                }
+                if(options.shadowOffsetY !== undefined && options.shadowOffsetY !== null){
+                    this.shadowOffsetY = options.shadowOffsetY;
+                }
+                if(options.shadowColor !== undefined && options.shadowColor !== null){
+                    this.shadowColor = options.shadowColor;
+                }
             }
         }
 
@@ -240,17 +249,19 @@ module BABYLON.GUI {
     
     export class Menu extends Rectangle {
     
-        showPanel: (panel: StackPanel) => void;
-        hidePanel: (panel: StackPanel) => void;
+        public showPanel: (panel: StackPanel) => void;
+        public hidePanel: (panel: StackPanel) => void;
         
-        panels: Array<StackPanel> = [];
-        currentPanel: StackPanel;
+        public panels: Array<StackPanel> = [];
+        public currentPanel: StackPanel;
 
         private _isVertical = true;
-        private _buttons:IControlHash = {};
-        private _buttonsSubmenu:IControlHash = {};
-        private _buttonStyles:IMenuStyleHash = {};
 
+        private _buttonsMap:IControlMap = {};
+        private _buttons:Array<Button> = [];
+        private _buttonsSubmenu:Array<Button> = [];
+        private _buttonStyles:Array<MenuStyle> = [];
+        
         private _headerControls:Array<Control> = [];
         private _navForwardControls:Array<Control> = [];
         private _navBackControls:Array<Control> = [];
@@ -275,8 +286,8 @@ module BABYLON.GUI {
             this._itemPointerUpAnimation = value;
             var buttons = this._buttons;
             
-            for(var key in buttons){
-                var button = <Button>buttons[key];
+            for(var i = 0; i < buttons.length; i++){
+                var button = buttons[i];
                 button.pointerUpAnimation = value;
             }
         }
@@ -288,9 +299,9 @@ module BABYLON.GUI {
         set itemPointerDownAnimation(value: () => void){          
             this._itemPointerDownAnimation = value;
             var buttons = this._buttons;
-            
-            for(var key in buttons){
-                var button = <Button>buttons[key];
+
+            for(var i = 0; i < buttons.length; i++){
+                var button = buttons[i];
                 button.pointerDownAnimation = value;
             }
         }
@@ -303,8 +314,8 @@ module BABYLON.GUI {
             this._itemPointerEnterAnimation = value;
             var buttons = this._buttons;
             
-            for(var key in buttons){
-                var button = <Button>buttons[key];
+            for(var i = 0; i < buttons.length; i++){
+                var button = buttons[i];
                 button.pointerEnterAnimation = value;
             }
         }
@@ -317,8 +328,8 @@ module BABYLON.GUI {
             this._itemPointerOutAnimation = value;
             var buttons = this._buttons;
             
-            for(var key in buttons){
-                var button = <Button>buttons[key];
+            for(var i = 0; i < buttons.length; i++){
+                var button = buttons[i];
                 button.pointerOutAnimation = value;
             }
         }
@@ -346,12 +357,12 @@ module BABYLON.GUI {
             this._itemStyle = new MenuStyle(style);
 
             this._headerStyle = new MenuStyle(style);
-            this._headerStyle.set({
+            this._headerStyle.update({
                 textHAlign: Control.HORIZONTAL_ALIGNMENT_CENTER
             });
 
             this._forwardButtonStyle = new MenuStyle(style);
-            this._forwardButtonStyle.set({
+            this._forwardButtonStyle.update({
                 text:">", 
                 padding:"10px", 
                 //paddingRight:"10px", 
@@ -360,7 +371,7 @@ module BABYLON.GUI {
             });
 
             this._backButtonStyle = new MenuStyle(style);
-            this._backButtonStyle.set({
+            this._backButtonStyle.update({
                 text:"<",
                 padding:"2px", 
                 //paddingLeft:"10px", 
@@ -424,17 +435,14 @@ module BABYLON.GUI {
             }
         }
 
-        private _getItemStyle(item:Control): MenuStyle{
-            var itemStyle = this._buttonStyles[item.name!];
-            if(!itemStyle){
-                itemStyle = this._itemStyle;
-            }
-            return itemStyle;
+        private _getItemStyle(item:Control): MenuStyle {
+            var index = this._buttons.indexOf(<Button>item);
+            return this._buttonStyles[index];
         }
 
         private _selectItem(eventData:Vector2WithInfo, eventState:EventState){            
-            var button = this._buttons[eventState.target.name];
-            if(!button || button == this._selectedItem){
+            var button = eventState.target;
+            if(button == this._selectedItem){
                 return;
             }
 
@@ -451,7 +459,7 @@ module BABYLON.GUI {
             }
 
             //don't select submenu button
-            if(this._buttonsSubmenu[eventState.target.name]){
+            if(this._buttonsSubmenu.indexOf(button) != -1){
                 this._selectedItem = null;
                 return;
             }
@@ -460,44 +468,39 @@ module BABYLON.GUI {
             this._selectedItem = <Button>button;      
         }
 
-        private _pointerEnterItem(eventData:Control, eventState:EventState){            
-            var button = this._buttons[eventData.name!];
-            if(!button || button == this._selectedItem){
+        private _pointerEnterItem(control:Control, eventState:EventState){            
+            if(control == this._selectedItem){
                 return;
-            }
-
-            var itemStyle = this._getItemStyle(button);
+            } 
+            var itemStyle = this._getItemStyle(control);
             var hoverStyle = this._itemHoveredStyle;
 
             if(itemStyle.isEqualTo(hoverStyle)){
                 return;
             }
 
-            this._styleItem(button, hoverStyle);    
+            this._styleItem(control, hoverStyle);    
         }
 
-        private _pointerOutItem(eventData:Control, eventState:EventState){            
-            var button = this._buttons[eventData.name!];
-            if(!button || button == this._selectedItem){
+        private _pointerOutItem(control:Control, eventState:EventState){            
+            if(control == this._selectedItem){
                 return;
             }
-
-            var itemStyle = this._getItemStyle(button);
+            var itemStyle = this._getItemStyle(control);
             var hoverStyle = this._itemHoveredStyle;
 
             if(itemStyle.isEqualTo(hoverStyle)){
                 return;
             }
 
-            this._styleItem(button, itemStyle);    
+            this._styleItem(control, itemStyle);    
         }
         
-        private _createItem(name:string, text:string, options: {expand?:boolean}) {
-            var button = new Button(name);
-            var textBlock = new TextBlock(name + "_text", text);
+        private _createItem(itemData:IMenuItemData) {
+            var button = new Button(itemData.id);
+            var textBlock = new TextBlock(name + "_text", itemData.text);
             
             button.addControl(textBlock);
-
             this._styleItem(button);
 
             this._itemPointerDownAnimation ? button.pointerDownAnimation = this._itemPointerDownAnimation : null;
@@ -513,17 +516,28 @@ module BABYLON.GUI {
                 button.onPointerUpObservable.add(this._selectItem, -1, false, this);
             }
 
-            if (options.expand) {
+            if (itemData.subMenu) {
                 var forwardStyle = this._forwardButtonStyle;
                 var forward = new TextBlock(name + "_expand", forwardStyle.text);
                 this._styleForwardControl(forward);
                 button.addControl(forward);
                 this._navForwardControls.push(forward);
-                this._buttonsSubmenu[name] = button;
+                //this._buttonsSubmenu[name] = button;
+                this._buttonsSubmenu.push(button);
             }
-    
-            this._buttons[name] = button;
-    
+
+            if(itemData.style){
+                var style = this._itemStyle.clone();
+                style.update(itemData.style);
+                this._buttonStyles.push(style);
+                this._styleItem(button, style);
+            }else{
+                this._buttonStyles.push(this._itemStyle);
+            }
+
+            this._buttons.push(button);
+            this._buttonsMap[itemData.id] = button;
+
             return button;
         }
     
@@ -583,6 +597,19 @@ module BABYLON.GUI {
             headerStyle.width ? header.width = headerStyle.width : null;    
             headerStyle.color ? headerRect.color = headerStyle.color: null;
             headerStyle.background ? headerRect.background = headerStyle.background: null;
+
+            if(headerStyle.shadowBlur != undefined && headerStyle.shadowBlur != null){
+                headerRect.shadowBlur = headerStyle.shadowBlur;
+            }
+            if(headerStyle.shadowOffsetX != undefined && headerStyle.shadowOffsetX != null){
+                headerRect.shadowOffsetX = headerStyle.shadowOffsetX;
+            }
+            if(headerStyle.shadowOffsetY != undefined && headerStyle.shadowOffsetY != null){
+                headerRect.shadowOffsetY = headerStyle.shadowOffsetY;
+            }
+            if(headerStyle.shadowColor != undefined && headerStyle.shadowColor != null){
+                headerRect.shadowColor = headerStyle.shadowColor;
+            }
 
             var textBlock = <TextBlock>headerRect.children[0];
 
@@ -694,17 +721,15 @@ module BABYLON.GUI {
             }
             
             if(items){
-                var item:IMenuItemData;
+                var itemData:IMenuItemData;
                 for (var i = 0; i < items.length; i++) {
-                    item = items[i]
-                    var button = this._createItem(item.id, item.text,
-                        {
-                            expand: (item.subMenu != undefined),
-                        });
-
+                    itemData = items[i];
+                    
+                    var button = this._createItem(itemData);
                     panel.addControl(button);
-                    if (item.subMenu) {
-                        var submenu = this._createMenu(item.subMenu, panel);
+
+                    if (itemData.subMenu) {
+                        var submenu = this._createMenu(itemData.subMenu, panel);
                         button.onPointerUpObservable.add(this._getNextMenuFunc(submenu, panel), -1, false, this);
                     }
                 }
@@ -735,11 +760,11 @@ module BABYLON.GUI {
         }  
     
         public getButtonByID(id:string):Button {
-            return <Button>this._buttons[id];
+            return <Button>this._buttonsMap[id];
         }
 
         public hideItem(itemID:string){
-            var button = this._buttons[itemID];
+            var button = this._buttonsMap[itemID];
 
             if(button){
                 button.isVisible = false;
@@ -749,7 +774,7 @@ module BABYLON.GUI {
         }
 
         public showItem(itemID:string){
-            var button = this._buttons[itemID];
+            var button = this._buttonsMap[itemID];
             
             if(button){
                 button.isVisible = true;
@@ -758,17 +783,17 @@ module BABYLON.GUI {
         }
 
         public setItemStyle(style: IMenuStyleData){        
-            this._itemStyle.set(style);
+            this._itemStyle.update(style);
             var buttons = this._buttons;
-
-            for(var key in buttons){
-                var button = buttons[key];
+            
+            for(var i = 0; i < buttons.length; i++){
+                var button = buttons[i];
                 this._styleItem(button);
             }
         }
 
         public setHeaderStyle(style: IMenuStyleData){
-            this._headerStyle.set(style);
+            this._headerStyle.update(style);
             var headers = this._headerControls;
 
             for(var i = 0; i < headers.length; i++){
@@ -777,7 +802,7 @@ module BABYLON.GUI {
         }
 
         public setNavBackStyle(style: IMenuStyleData){
-            this._backButtonStyle.set(style);
+            this._backButtonStyle.update(style);
             var controls = this._navBackControls;
 
             for(var i = 0; i < controls.length; i++){
@@ -786,7 +811,7 @@ module BABYLON.GUI {
         }
 
         public setNavForwardStyle(style: IMenuStyleData){
-            this._forwardButtonStyle.set(style);
+            this._forwardButtonStyle.update(style);
             var controls = this._navForwardControls;
 
             for(var i = 0; i < controls.length; i++){
@@ -798,10 +823,12 @@ module BABYLON.GUI {
             if(!this._itemSelectedStyle){
                 this._itemSelectedStyle = this._itemStyle.clone();
             }
-            this._itemSelectedStyle.set(style);
-
-            for(var key in this._buttons){
-                var button = this._buttons[key];
+            this._itemSelectedStyle.update(style);
+            
+            var buttons = this._buttons;
+            
+            for(var i = 0; i < buttons.length; i++){
+                var button = buttons[i];
                 button.onPointerUpObservable.removeCallback(this._selectItem);
                 button.onPointerUpObservable.add(this._selectItem, -1, false, this);
             }
@@ -811,10 +838,11 @@ module BABYLON.GUI {
             if(!this._itemHoveredStyle){
                 this._itemHoveredStyle = this._itemStyle.clone();
             }
-            this._itemHoveredStyle.set(style);
-
-            for(var key in this._buttons){
-                var button = this._buttons[key];
+            this._itemHoveredStyle.update(style);
+            var buttons = this._buttons;
+            
+            for(var i = 0; i < buttons.length; i++){
+                var button = buttons[i];
                 button.onPointerOutObservable.removeCallback(this._pointerOutItem);
                 button.onPointerEnterObservable.removeCallback(this._pointerEnterItem);
                 button.onPointerOutObservable.add(this._pointerOutItem, -1, false, this);
@@ -830,6 +858,19 @@ module BABYLON.GUI {
             }
         }
 
+        private _getCurrentPanel(): StackPanel{
+            var panels = this.panels;
+            if (panels.length == 0) {
+                var panel = new StackPanel();
+                panel.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+                panel.isVertical = this._isVertical;
+                this.panels.unshift(panel);
+                this.showPanel(panel);
+                this.currentPanel = panel;
+            }
+            return this.currentPanel;
+        }
+
         public addControlToMenu(control:Control, subMenuID?: string){
             var addToPanel: StackPanel = null!;
             var panels = this.panels;
@@ -841,14 +882,7 @@ module BABYLON.GUI {
                     }
                 }
             } else {
-                if (panels.length == 0) {
-                    var panel = new StackPanel();
-                    panel.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
-                    panel.isVertical = this._isVertical;
-                    this.panels.unshift(panel);
-                    this.showPanel(panel);
-                }
-                addToPanel = this.currentPanel;
+                addToPanel = this._getCurrentPanel();
             }
 
             if (addToPanel){
@@ -856,7 +890,7 @@ module BABYLON.GUI {
             }
         }
     
-        public addItem(item: IMenuItemData, subMenuID?: string) {
+        public addItem(itemData: IMenuItemData, subMenuID?: string) {
             var addToPanel: StackPanel = null!;
             var panels = this.panels;
 
@@ -867,27 +901,34 @@ module BABYLON.GUI {
                     }
                 }
             } else {
-                if (panels.length == 0) {
-                    var panel = new StackPanel();
-                    panel.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
-                    panel.isVertical = this._isVertical;
-                    this.panels.unshift(panel);
-                    this.showPanel(panel);
-                }
-                addToPanel = this.currentPanel;
+                addToPanel = this._getCurrentPanel();
             }
 
             if (addToPanel){
-                var button = this._createItem(item.id, item.text,
-                    {
-                        expand: (item.subMenu != undefined),
-                    });
+                var button = this._createItem(itemData);
                 addToPanel.addControl(button);
-                if (item.subMenu) {
-                    var submenu = this._createMenu(item.subMenu, addToPanel);
+                if (itemData.subMenu) {
+                    var submenu = this._createMenu(itemData.subMenu, addToPanel);
                     button.onPointerUpObservable.add(this._getNextMenuFunc(submenu, addToPanel), -1, false, this);
                 }
             }
+        }
+
+        dispose(){
+
+            super.dispose();
+
+            this._buttons.length = 0;
+            this._buttonsSubmenu.length = 0;
+            this._buttonStyles.length = 0;
+            this._headerControls.length = 0;
+            this._navForwardControls.length = 0;
+            this._navBackControls.length = 0;
+            
+            for(var key in this._buttonsMap){
+                this._buttonsMap[key] = null;
+            }
+
         }
     
     }
