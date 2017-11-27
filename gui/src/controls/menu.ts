@@ -348,7 +348,7 @@ module BABYLON.GUI {
             return this._isVertical;
         }
 
-        constructor(name: string, 
+        constructor(name?: string, 
             style?: IMenuStyleData,
         ) {
 
